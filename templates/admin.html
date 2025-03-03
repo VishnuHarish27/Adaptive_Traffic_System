@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Traffic Monitoring</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/konva@8.3.3/konva.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-gray-800 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">Admin Panel</h1>
+                <nav class="mt-2 flex space-x-4">
+                    <a href="{{ url_for('index') }}" class="text-white hover:text-gray-300">Home</a>
+                    <a href="{{ url_for('analytics') }}" class="text-white hover:text-gray-300">Analytics</a>
+                    <a href="{{ url_for('admin_panel') }}" class="text-white hover:text-gray-300">Admin Panel</a>
+                </nav>
+            </div>
+            <a href="{{ url_for('logout') }}"
+               class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
+                Logout
+            </a>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-6">
+        <!-- New System Parameters Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-bold mb-4">System Parameters</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="frame-skip" class="block mb-2 text-sm font-medium">Frame Skip Count</label>
+                    <div class="flex items-center space-x-4">
+                        <input type="number" id="frame-skip" min="1" value="1"
+                               class="p-2 border rounded w-32">
+                        <button onclick="updateFrameSkip()"
+                                class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Update
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="vehicle-threshold" class="block mb-2 text-sm font-medium">Vehicle Threshold (X) for VDC=1</label>
+                    <div class="flex items-center space-x-4">
+                        <input type="number" id="vehicle-threshold" min="1" value="5"
+                               class="p-2 border rounded w-32">
+                        <button onclick="updateVehicleThreshold()"
+                                class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Update
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Existing Camera Controls -->
+        <div class="flex flex-col items-center mb-6">
+            <div class="mb-4">
+                <label for="camera-select" class="block mb-2 text-lg font-medium text-center">Select Camera</label>
+                <select id="camera-select" class="p-2 border rounded">
+                    <option value="cam1">Camera 1</option>
+                    <option value="cam2">Camera 2</option>
+                    <option value="cam3">Camera 3</option>
+                    <option value="cam4">Camera 4</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="region-type" class="block mb-2 text-lg font-medium text-center">Select Region Type</label>
+                <select id="region-type" class="p-2 border rounded">
+                    <option value="R">Traffic Region (R1)</option>
+                    <option value="Zebra">Zebra Crossing</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="flex justify-center space-x-8">
+            <!-- Live Camera Feed with Drawing -->
+            <div class="flex flex-col items-center">
+                <h2 class="text-xl font-bold mb-4">Live Camera Feed (Drawing Area)</h2>
+                <div id="canvas-container" class="relative inline-block bg-white border border-gray-300 shadow-md">
+                    <img id="camera-frame" style="display: block; max-width: 100%; height: auto;" />
+                    <div id="drawing-layer" style="position: absolute; top: 0; left: 0;"></div>
+                </div>
+            </div>
+
+            <!-- Last Processed Image -->
+            <div class="flex flex-col items-center">
+                <h2 class="text-xl font-bold mb-4">Last Processed Image (Reference)</h2>
+                <div class="bg-white border border-gray-300 shadow-md">
+                    <img id="reference-frame" style="display: block; max-width: 100%; height: auto;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-center space-x-4 mt-6">
+            <button id="save-regions" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Save Regions</button>
+            <button id="clear-regions" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Clear</button>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white p-4 text-center mt-6">
+        <p>© 2024 Traffic Monitoring System</p>
+    </footer>
+
+    <script>
+        const frameElement = document.getElementById('camera-frame');
+        const referenceFrame = document.getElementById('reference-frame');
+        const drawingLayer = document.getElementById('drawing-layer');
+        let regions = [];
+        let currentCamera = 'cam1';
+        let points = [];
+        let currentRegionType = 'R';
+
+        // New functions for system parameters
+        async function updateFrameSkip() {
+            const frameSkip = document.getElementById('frame-skip').value;
+            try {
+                const response = await fetch('/update_frame_skip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ frame_skip: parseInt(frameSkip) }),
+                });
+                const data = await response.json();
+                alert(data.message || 'Frame skip count updated successfully');
+            } catch (error) {
+                console.error('Error updating frame skip:', error);
+                alert('Failed to update frame skip count');
+            }
+        }
+
+        async function updateVehicleThreshold() {
+            const threshold = document.getElementById('vehicle-threshold').value;
+            try {
+                const response = await fetch('/update_vehicle_threshold', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ threshold: parseInt(threshold) }),
+                });
+                const data = await response.json();
+                alert(data.message || 'Vehicle threshold updated successfully');
+            } catch (error) {
+                console.error('Error updating vehicle threshold:', error);
+                alert('Failed to update vehicle threshold');
+            }
+        }
+
+        // Function to load the last processed image
+        async function loadLastProcessedImage(camId) {
+            try {
+                const response = await fetch(`/get_last_processed/${camId}`);
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    referenceFrame.src = data.image_url;
+                } else {
+                    console.error('Failed to load last processed image:', data.message);
+                    referenceFrame.src = ''; // Clear the image if failed
+                }
+            } catch (error) {
+                console.error('Error loading last processed image:', error);
+            }
+        }
+
+        // Update region type when selection changes
+        document.getElementById('region-type').addEventListener('change', (e) => {
+            currentRegionType = e.target.value;
+            points = [];
+            layer.destroyChildren();
+            layer.draw();
+        });
+
+        // Load both frames when camera changes
+        document.getElementById('camera-select').addEventListener('change', async (e) => {
+            currentCamera = e.target.value;
+            points = [];
+
+            // Load live frame
+            const response = await fetch(`/get_frame/${currentCamera}`);
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                frameElement.src = data.frame_url;
+
+                frameElement.onload = () => {
+                    drawingLayer.style.width = `${frameElement.naturalWidth}px`;
+                    drawingLayer.style.height = `${frameElement.naturalHeight}px`;
+                    drawingLayer.style.display = 'block';
+
+                    stage.width(frameElement.naturalWidth);
+                    stage.height(frameElement.naturalHeight);
+
+                    layer.destroyChildren();
+                    layer.draw();
+                };
+            } else {
+                alert(data.message);
+            }
+
+            // Load reference frame
+            await loadLastProcessedImage(currentCamera);
+        });
+
+        const stage = new Konva.Stage({
+            container: 'drawing-layer',
+            width: 0,
+            height: 0,
+        });
+
+        const layer = new Konva.Layer();
+        stage.add(layer);
+
+        stage.on('click', (e) => {
+            const pos = stage.getPointerPosition();
+
+            if (currentRegionType === 'Zebra') {
+                if (points.length < 2) {
+                    points.push([pos.x, pos.y]);
+
+                    const point = new Konva.Circle({
+                        x: pos.x,
+                        y: pos.y,
+                        radius: 5,
+                        fill: 'blue',
+                    });
+                    layer.add(point);
+
+                    if (points.length === 2) {
+                        const line = new Konva.Line({
+                            points: points.flat(),
+                            stroke: 'blue',
+                            strokeWidth: 2,
+                        });
+                        layer.add(line);
+                    }
+                }
+            } else {
+                const point = new Konva.Circle({
+                    x: pos.x,
+                    y: pos.y,
+                    radius: 5,
+                    fill: 'red',
+                });
+                layer.add(point);
+                points.push([pos.x, pos.y]);
+
+                if (points.length >= 2) {
+                    layer.find('Line').forEach(line => line.destroy());
+                    const polygon = new Konva.Line({
+                        points: points.flat(),
+                        stroke: 'red',
+                        strokeWidth: 2,
+                        closed: points.length >= 3,
+                    });
+                    layer.add(polygon);
+                }
+            }
+            layer.draw();
+        });
+
+        document.getElementById('save-regions').addEventListener('click', async () => {
+            if ((currentRegionType === 'Zebra' && points.length === 2) ||
+                (currentRegionType === 'R' && points.length >= 3)) {
+
+                const region = {
+                    vertices: points,
+                    type: currentRegionType,
+                    color: currentRegionType === 'Zebra' ? 'blue' : 'red',
+                };
+
+                const response = await fetch('/update_regions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cam_id: currentCamera,
+                        regions: [region],
+                    }),
+                });
+
+                const data = await response.json();
+                alert(data.message);
+                points = [];
+                layer.destroyChildren();
+                layer.draw();
+
+                // Reload the reference image after saving
+                await loadLastProcessedImage(currentCamera);
+            } else {
+                alert(currentRegionType === 'Zebra'
+                    ? "Please add exactly 2 points for the zebra crossing"
+                    : "Please add at least 3 points to form a polygon");
+            }
+        });
+
+        document.getElementById('clear-regions').addEventListener('click', () => {
+            points = [];
+            layer.destroyChildren();
+            layer.draw();
+        });
+
+        // Auto-refresh reference image every 10 seconds
+        setInterval(async () => {
+            await loadLastProcessedImage(currentCamera);
+        }, 10000);
+
+        // Load initial frames
+        document.getElementById('camera-select').dispatchEvent(new Event('change'));
+    </script>
+</body>
+</html>

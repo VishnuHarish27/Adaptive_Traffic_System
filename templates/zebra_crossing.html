@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Zebra Crossing Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-gray-800 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Zebra Crossing Vehicle Analytics</h1>
+            <nav>
+                <a href="{{ url_for('index') }}" class="text-white hover:text-gray-300 mr-4">Home</a>
+                <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
+                    Logout
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-6">
+        <div class="grid grid-cols-2 gap-4">
+            {% for cam_id in range(1, 5) %}
+            <div class="bg-white shadow rounded-lg p-4">
+                <h2 class="text-xl font-bold mb-4">Camera {{ cam_id }} Zebra Crossing Data</h2>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                        Filter Vehicle Type
+                    </label>
+                    <select id="vehicle-type-filter-cam{{ cam_id }}"
+                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700">
+                        <option value="">All Vehicles</option>
+                        <option value="car">Cars</option>
+                        <option value="truck">Trucks</option>
+                        <option value="bus">Buses</option>
+                        <option value="motorcycle">Motorcycles</option>
+                        <option value="bicycle">Bicycles</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                        Filter by Date
+                    </label>
+                    <input type="date" id="date-filter-cam{{ cam_id }}"
+                           class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700">
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-500" id="data-table-cam{{ cam_id }}">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2">Timestamp</th>
+                                <th class="px-4 py-2">Vehicle Type</th>
+                                <th class="px-4 py-2">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in data['cam' ~ cam_id] %}
+                            <tr class="bg-white border-b hover:bg-gray-50">
+                                <td class="px-4 py-2">{{ entry.timestamp }}</td>
+                                <td class="px-4 py-2">{{ entry.vehicle_type }}</td>
+                                <td class="px-4 py-2">{{ entry.vehicle_count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <script>
+        // Simple filtering script for each camera's table
+        function setupTableFilter(camId) {
+            const vehicleFilter = document.getElementById(`vehicle-type-filter-cam${camId}`);
+            const dateFilter = document.getElementById(`date-filter-cam${camId}`);
+            const table = document.getElementById(`data-table-cam${camId}`);
+
+            function applyFilters() {
+                const rows = table.querySelectorAll('tbody tr');
+                const vehicleFilterValue = vehicleFilter.value.toLowerCase();
+                const dateFilterValue = dateFilter.value;
+
+                rows.forEach(row => {
+                    const vehicleType = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                    const timestamp = row.querySelector('td:nth-child(1)').textContent.split(' ')[0];
+
+                    const vehicleMatch = vehicleFilterValue === '' || vehicleType === vehicleFilterValue;
+                    const dateMatch = dateFilterValue === '' || timestamp === dateFilterValue;
+
+                    row.style.display = vehicleMatch && dateMatch ? '' : 'none';
+                });
+            }
+
+            vehicleFilter.addEventListener('change', applyFilters);
+            dateFilter.addEventListener('change', applyFilters);
+        }
+
+        // Setup filters for all cameras
+        for (let camId = 1; camId <= 4; camId++) {
+            setupTableFilter(camId);
+        }
+    </script>
+</body>
+</html>
